@@ -3,11 +3,6 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ErrorCode, ListToolsRequestSchema, McpError } from '@modelcontextprotocol/sdk/types.js';
 import axios, { AxiosInstance } from 'axios';
 
-interface PackageSearchResult {
-    name: string;
-    score: number;
-}
-
 interface PackageDetails {
     name: string;
     version: string;
@@ -51,8 +46,6 @@ interface ToolRequest {
     params: {
         name: string;
         arguments?: {
-            query?: string;
-            limit?: number;
             package_name?: string;
         };
     };
@@ -61,9 +54,6 @@ interface ToolRequest {
 class PyPISearchServer {
     private server: Server;
     private axiosInstance: AxiosInstance;
-    private packageCache: string[] | null = null;
-    private lastCacheUpdate: number = 0;
-    private readonly CACHE_TTL = 3600000; // 1 hour in milliseconds
 
     constructor() {
         this.server = new Server({
@@ -87,68 +77,6 @@ class PyPISearchServer {
             await this.server.close();
             process.exit(0);
         });
-    }
-
-    private async getAllPackages(): Promise<string[]> {
-        const now = Date.now();
-        if (this.packageCache && (now - this.lastCacheUpdate) < this.CACHE_TTL) {
-            return this.packageCache;
-        }
-
-        try {
-            const response = await this.axiosInstance.get('/simple/', {
-                headers: {
-                    'Accept': 'text/html'
-                }
-            });
-
-            // Extract package names from HTML response
-            const html = response.data as string;
-            const packageNames = html.match(/href="([^"]+)"/g)?.map(href => {
-                const match = href.match(/href="([^"]+)"/);
-                return match ? decodeURIComponent(match[1].replace(/\/$/, '')) : '';
-            }).filter(name => name) || [];
-
-            this.packageCache = packageNames;
-            this.lastCacheUpdate = now;
-            return packageNames;
-        } catch (error) {
-            console.error('Error fetching package list:', error);
-            if (this.packageCache) {
-                console.warn('Using stale package cache');
-                return this.packageCache;
-            }
-            throw error;
-        }
-    }
-
-    private async searchPackages(query: string, limit: number = 100): Promise<PackageSearchResult[]> {
-        const packages = await this.getAllPackages();
-        const results: PackageSearchResult[] = [];
-
-        // First look for exact matches
-        const exactMatches = packages.filter(pkg => pkg.toLowerCase() === query.toLowerCase());
-        exactMatches.forEach(name => {
-            results.push({ name, score: 1.0 });
-        });
-
-        // If we need more results, look for packages containing the query
-        if (results.length < limit) {
-            const partialMatches = packages
-                .filter(pkg =>
-                    !exactMatches.includes(pkg) &&
-                    pkg.toLowerCase().includes(query.toLowerCase())
-                )
-                .map(name => ({
-                    name,
-                    score: 0.5 // Lower score for partial matches
-                }));
-            results.push(...partialMatches);
-        }
-
-        return results
-            .sort((a, b) => b.score - a.score)
-            .slice(0, limit);
     }
 
     private async getPackageInfo(packageName: string): Promise<PyPIResponse> {
@@ -213,28 +141,8 @@ class PyPISearchServer {
         this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
             tools: [
                 {
-                    name: 'search_packages',
-                    description: 'Search PyPI packages by name',
-                    inputSchema: {
-                        type: 'object',
-                        properties: {
-                            query: {
-                                type: 'string',
-                                description: 'Package name to search for'
-                            },
-                            limit: {
-                                type: 'number',
-                                description: 'Maximum number of results (default: 100)',
-                                minimum: 1,
-                                maximum: 500
-                            }
-                        },
-                        required: ['query']
-                    }
-                },
-                {
                     name: 'get_package_details',
-                    description: 'Get detailed information about a specific package',
+                    description: 'Get detailed information about a specific package including maintenance status',
                     inputSchema: {
                         type: 'object',
                         properties: {
@@ -254,33 +162,6 @@ class PyPISearchServer {
                 const { name, arguments: args } = request.params;
 
                 switch (name) {
-                    case 'search_packages': {
-                        const query = args?.query;
-                        const limit = args?.limit;
-
-                        if (!query) {
-                            throw new McpError(ErrorCode.InvalidParams, 'Query is required');
-                        }
-
-                        const results = await this.searchPackages(query, limit);
-
-                        if (results.length === 0) {
-                            return {
-                                content: [{
-                                    type: 'text',
-                                    text: 'No packages found matching the search criteria.'
-                                }]
-                            };
-                        }
-
-                        return {
-                            content: [{
-                                type: 'text',
-                                text: JSON.stringify(results, null, 2)
-                            }]
-                        };
-                    }
-
                     case 'get_package_details': {
                         const packageName = args?.package_name;
                         if (!packageName) {
