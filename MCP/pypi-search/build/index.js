@@ -4,9 +4,6 @@ import { CallToolRequestSchema, ErrorCode, ListToolsRequestSchema, McpError } fr
 import axios from 'axios';
 class PyPISearchServer {
     constructor() {
-        this.packageCache = null;
-        this.lastCacheUpdate = 0;
-        this.CACHE_TTL = 3600000; // 1 hour in milliseconds
         this.server = new Server({
             name: 'pypi-search',
             version: '0.1.0'
@@ -25,59 +22,6 @@ class PyPISearchServer {
             await this.server.close();
             process.exit(0);
         });
-    }
-    async getAllPackages() {
-        const now = Date.now();
-        if (this.packageCache && (now - this.lastCacheUpdate) < this.CACHE_TTL) {
-            return this.packageCache;
-        }
-        try {
-            const response = await this.axiosInstance.get('/simple/', {
-                headers: {
-                    'Accept': 'text/html'
-                }
-            });
-            // Extract package names from HTML response
-            const html = response.data;
-            const packageNames = html.match(/href="([^"]+)"/g)?.map(href => {
-                const match = href.match(/href="([^"]+)"/);
-                return match ? decodeURIComponent(match[1].replace(/\/$/, '')) : '';
-            }).filter(name => name) || [];
-            this.packageCache = packageNames;
-            this.lastCacheUpdate = now;
-            return packageNames;
-        }
-        catch (error) {
-            console.error('Error fetching package list:', error);
-            if (this.packageCache) {
-                console.warn('Using stale package cache');
-                return this.packageCache;
-            }
-            throw error;
-        }
-    }
-    async searchPackages(query, limit = 100) {
-        const packages = await this.getAllPackages();
-        const results = [];
-        // First look for exact matches
-        const exactMatches = packages.filter(pkg => pkg.toLowerCase() === query.toLowerCase());
-        exactMatches.forEach(name => {
-            results.push({ name, score: 1.0 });
-        });
-        // If we need more results, look for packages containing the query
-        if (results.length < limit) {
-            const partialMatches = packages
-                .filter(pkg => !exactMatches.includes(pkg) &&
-                pkg.toLowerCase().includes(query.toLowerCase()))
-                .map(name => ({
-                name,
-                score: 0.5 // Lower score for partial matches
-            }));
-            results.push(...partialMatches);
-        }
-        return results
-            .sort((a, b) => b.score - a.score)
-            .slice(0, limit);
     }
     async getPackageInfo(packageName) {
         const response = await this.axiosInstance.get(`/pypi/${packageName}/json`);
@@ -134,28 +78,8 @@ class PyPISearchServer {
         this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
             tools: [
                 {
-                    name: 'search_packages',
-                    description: 'Search PyPI packages by name',
-                    inputSchema: {
-                        type: 'object',
-                        properties: {
-                            query: {
-                                type: 'string',
-                                description: 'Package name to search for'
-                            },
-                            limit: {
-                                type: 'number',
-                                description: 'Maximum number of results (default: 100)',
-                                minimum: 1,
-                                maximum: 500
-                            }
-                        },
-                        required: ['query']
-                    }
-                },
-                {
                     name: 'get_package_details',
-                    description: 'Get detailed information about a specific package',
+                    description: 'Get detailed information about a specific package including maintenance status',
                     inputSchema: {
                         type: 'object',
                         properties: {
@@ -173,40 +97,38 @@ class PyPISearchServer {
             try {
                 const { name, arguments: args } = request.params;
                 switch (name) {
-                    case 'search_packages': {
-                        const query = args?.query;
-                        const limit = args?.limit;
-                        if (!query) {
-                            throw new McpError(ErrorCode.InvalidParams, 'Query is required');
+                    case 'get_package_details': {
+                        // Input validation
+                        if (!args?.package_name) {
+                            throw new McpError(ErrorCode.InvalidParams, 'Missing required parameter: package_name');
                         }
-                        const results = await this.searchPackages(query, limit);
-                        if (results.length === 0) {
+                        const trimmedName = args.package_name.trim();
+                        if (trimmedName === '') {
+                            throw new McpError(ErrorCode.InvalidParams, 'Invalid package name: cannot be empty');
+                        }
+                        try {
+                            const details = await this.getPackageDetails(trimmedName);
                             return {
                                 content: [{
                                         type: 'text',
-                                        text: 'No packages found matching the search criteria.'
+                                        text: JSON.stringify(details, null, 2)
                                     }]
                             };
                         }
-                        return {
-                            content: [{
-                                    type: 'text',
-                                    text: JSON.stringify(results, null, 2)
-                                }]
-                        };
-                    }
-                    case 'get_package_details': {
-                        const packageName = args?.package_name;
-                        if (!packageName) {
-                            throw new McpError(ErrorCode.InvalidParams, 'Package name is required');
+                        catch (error) {
+                            if (error instanceof Error && 'response' in error) {
+                                if (error.response?.status === 404) {
+                                    return {
+                                        content: [{
+                                                type: 'text',
+                                                text: JSON.stringify({ message: "Not Found" })
+                                            }],
+                                        isError: true
+                                    };
+                                }
+                            }
+                            throw error;
                         }
-                        const details = await this.getPackageDetails(packageName);
-                        return {
-                            content: [{
-                                    type: 'text',
-                                    text: JSON.stringify(details, null, 2)
-                                }]
-                        };
                     }
                     default:
                         throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
@@ -214,9 +136,17 @@ class PyPISearchServer {
             }
             catch (error) {
                 console.error('Error:', error);
+                // Handle validation errors
                 if (error instanceof McpError) {
-                    throw error;
+                    return {
+                        content: [{
+                                type: 'text',
+                                text: error.message
+                            }],
+                        isError: true
+                    };
                 }
+                // Handle API errors
                 if (error instanceof Error && 'response' in error) {
                     console.error('Full error:', {
                         message: error.message,
@@ -241,7 +171,15 @@ class PyPISearchServer {
                         isError: true
                     };
                 }
-                throw error;
+                // Handle unexpected errors
+                console.error('Unexpected error:', error);
+                return {
+                    content: [{
+                            type: 'text',
+                            text: 'An unexpected error occurred'
+                        }],
+                    isError: true
+                };
             }
         });
     }

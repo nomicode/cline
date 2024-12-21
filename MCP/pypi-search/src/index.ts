@@ -163,18 +163,42 @@ class PyPISearchServer {
 
                 switch (name) {
                     case 'get_package_details': {
-                        const packageName = args?.package_name;
-                        if (!packageName) {
-                            throw new McpError(ErrorCode.InvalidParams, 'Package name is required');
+                        // Input validation
+                        if (!args?.package_name) {
+                            throw new McpError(
+                                ErrorCode.InvalidParams,
+                                'Missing required parameter: package_name'
+                            );
                         }
 
-                        const details = await this.getPackageDetails(packageName);
-                        return {
-                            content: [{
-                                type: 'text',
-                                text: JSON.stringify(details, null, 2)
-                            }]
-                        };
+                        const trimmedName = args.package_name.trim();
+                        if (trimmedName === '') {
+                            throw new McpError(
+                                ErrorCode.InvalidParams,
+                                'Invalid package name: cannot be empty'
+                            );
+                        }
+
+                        try {
+                            const details = await this.getPackageDetails(trimmedName);
+                            return {
+                                content: [{
+                                    type: 'text',
+                                    text: JSON.stringify(details, null, 2)
+                                }]
+                            };
+                        } catch (error) {
+                            if (error instanceof Error && 'response' in error && (error as any).response?.status === 404) {
+                                return {
+                                    content: [{
+                                        type: 'text',
+                                        text: JSON.stringify({ message: "Not Found" })
+                                    }],
+                                    isError: true
+                                };
+                            }
+                            throw error;
+                        }
                     }
 
                     default:
@@ -185,9 +209,18 @@ class PyPISearchServer {
                 }
             } catch (error) {
                 console.error('Error:', error);
+                // Handle validation errors
                 if (error instanceof McpError) {
-                    throw error;
+                    return {
+                        content: [{
+                            type: 'text',
+                            text: error.message
+                        }],
+                        isError: true
+                    };
                 }
+
+                // Handle API errors
                 if (error instanceof Error && 'response' in error) {
                     console.error('Full error:', {
                         message: error.message,
@@ -196,15 +229,6 @@ class PyPISearchServer {
                         headers: (error as any).response?.headers
                     });
 
-                    if ((error as any).response?.status === 404) {
-                        return {
-                            content: [{
-                                type: 'text',
-                                text: 'Package not found'
-                            }],
-                            isError: true
-                        };
-                    }
                     return {
                         content: [{
                             type: 'text',
@@ -213,7 +237,16 @@ class PyPISearchServer {
                         isError: true
                     };
                 }
-                throw error;
+
+                // Handle unexpected errors
+                console.error('Unexpected error:', error);
+                return {
+                    content: [{
+                        type: 'text',
+                        text: 'An unexpected error occurred'
+                    }],
+                    isError: true
+                };
             }
         });
     }
