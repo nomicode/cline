@@ -4,17 +4,20 @@ import { CallToolRequestSchema, ErrorCode, ListToolsRequestSchema, McpError } fr
 import axios from 'axios';
 class PyPISearchServer {
     constructor() {
+        this.packageCache = null;
+        this.lastCacheUpdate = 0;
+        this.CACHE_TTL = 3600000; // 1 hour in milliseconds
         this.server = new Server({
             name: 'pypi-search',
-            version: '0.1.0',
+            version: '0.1.0'
         }, {
             capabilities: {
-                tools: {},
-            },
+                tools: {}
+            }
         });
         this.axiosInstance = axios.create({
             baseURL: 'https://pypi.org',
-            timeout: 10000,
+            timeout: 10000
         });
         this.setupToolHandlers();
         this.server.onerror = (error) => console.error('[MCP Error]', error);
@@ -23,103 +26,57 @@ class PyPISearchServer {
             process.exit(0);
         });
     }
-    calculateSimilarityScore(str1, str2) {
-        str1 = str1.toLowerCase();
-        str2 = str2.toLowerCase();
-        if (str1 === str2)
-            return 1;
-        if (str1.includes(str2) || str2.includes(str1))
-            return 0.9;
-        const words1 = str1.split(/[\W_]+/);
-        const words2 = str2.split(/[\W_]+/);
-        let matches = 0;
-        words1.forEach(word1 => {
-            words2.forEach(word2 => {
-                if (word1.length > 2 && word2.length > 2) {
-                    if (word1.includes(word2) || word2.includes(word1))
-                        matches += 0.5;
-                    if (this.areWordsRelated(word1, word2))
-                        matches += 0.3;
+    async getAllPackages() {
+        const now = Date.now();
+        if (this.packageCache && (now - this.lastCacheUpdate) < this.CACHE_TTL) {
+            return this.packageCache;
+        }
+        try {
+            const response = await this.axiosInstance.get('/simple/', {
+                headers: {
+                    'Accept': 'text/html'
                 }
             });
-        });
-        return Math.min(1, matches / Math.max(words1.length, words2.length));
-    }
-    areWordsRelated(word1, word2) {
-        const variations = [
-            [word1, word1 + 's'],
-            [word1, word1 + 'es'],
-            [word1, word1 + 'er'],
-            [word1, word1 + 'or'],
-            [word1, word1 + 'able'],
-            [word1, word1 + 'ible'],
-            [word1, word1 + 'util'],
-            [word1, word1 + 'utils'],
-            [word1, word1 + 'helper'],
-            [word1, word1 + 'handler'],
-            [word1, word1 + 'manager'],
-            [word1, 'py' + word1],
-            [word1, word1 + 'py'],
-            [word1, word1 + 'lib'],
-            [word1, 'lib' + word1],
-            // Common Python package naming patterns
-            [word1, word1.replace('-', '_')],
-            [word1, word1.replace('_', '-')],
-            [word1, 'python-' + word1],
-            [word1, 'python_' + word1],
-            [word1, word1 + '-python'],
-            [word1, word1 + '_python'],
-        ];
-        return variations.some(([base, variant]) => word2 === variant || word2 === base);
-    }
-    async searchPackages(query, alternativeTerms = [], limit = 100) {
-        // Combine all search terms
-        const searchTerms = [query, ...alternativeTerms];
-        // Search results for each term
-        const allResults = new Map();
-        for (const term of searchTerms) {
-            try {
-                // Use the XML-RPC search API
-                const response = await this.axiosInstance.get('/pypi', {
-                    params: {
-                        action: 'search',
-                        term: term,
-                        type: 'package',
-                        'submit.x': 0,
-                        'submit.y': 0,
-                    },
-                    headers: {
-                        'Accept': 'application/json',
-                    },
-                });
-                const searchResults = response.data;
-                if (Array.isArray(searchResults)) {
-                    for (const pkg of searchResults) {
-                        if (!allResults.has(pkg.name)) {
-                            const score = this.calculateSimilarityScore(pkg.name, query);
-                            if (score > 0.2) { // Minimum relevance threshold
-                                allResults.set(pkg.name, {
-                                    name: pkg.name,
-                                    searchScore: score,
-                                    summary: pkg.summary,
-                                });
-                            }
-                        }
-                    }
-                }
-            }
-            catch (error) {
-                if (error instanceof Error) {
-                    console.error(`Error searching for term "${term}":`, error.message);
-                    if ('response' in error && error.response) {
-                        console.error('Response:', error.response);
-                    }
-                }
-            }
+            // Extract package names from HTML response
+            const html = response.data;
+            const packageNames = html.match(/href="([^"]+)"/g)?.map(href => {
+                const match = href.match(/href="([^"]+)"/);
+                return match ? decodeURIComponent(match[1].replace(/\/$/, '')) : '';
+            }).filter(name => name) || [];
+            this.packageCache = packageNames;
+            this.lastCacheUpdate = now;
+            return packageNames;
         }
-        // Sort by search score and limit results
-        return Array.from(allResults.values())
-            .sort((a, b) => b.searchScore - a.searchScore)
+        catch (error) {
+            console.error('Error fetching package list:', error);
+            if (this.packageCache) {
+                console.warn('Using stale package cache');
+                return this.packageCache;
+            }
+            throw error;
+        }
+    }
+    async searchPackages(query, limit = 100) {
+        const packages = await this.getAllPackages();
+        const results = [];
+        // First look for exact matches
+        const exactMatches = packages.filter(pkg => pkg.toLowerCase() === query.toLowerCase());
+        exactMatches.forEach(name => {
+            results.push({ name, score: 1.0 });
+        });
+        // If we need more results, look for packages containing the query
+        if (results.length < limit) {
+            const partialMatches = packages
+                .filter(pkg => !exactMatches.includes(pkg) &&
+                pkg.toLowerCase().includes(query.toLowerCase()))
+                .map(name => ({
+                name,
+                score: 0.5 // Lower score for partial matches
+            }));
+            results.push(...partialMatches);
+        }
+        return results
+            .sort((a, b) => b.score - a.score)
             .slice(0, limit);
     }
     async getPackageInfo(packageName) {
@@ -178,46 +135,39 @@ class PyPISearchServer {
             tools: [
                 {
                     name: 'search_packages',
-                    description: 'Search PyPI packages with semantic search capabilities',
+                    description: 'Search PyPI packages by name',
                     inputSchema: {
                         type: 'object',
                         properties: {
                             query: {
                                 type: 'string',
-                                description: 'Primary search query',
-                            },
-                            alternativeTerms: {
-                                type: 'array',
-                                items: {
-                                    type: 'string'
-                                },
-                                description: 'Alternative search terms or patterns (e.g., ["video-split", "video_splitter", "split_video"])',
+                                description: 'Package name to search for'
                             },
                             limit: {
                                 type: 'number',
                                 description: 'Maximum number of results (default: 100)',
                                 minimum: 1,
-                                maximum: 500,
-                            },
+                                maximum: 500
+                            }
                         },
-                        required: ['query'],
-                    },
+                        required: ['query']
+                    }
                 },
                 {
                     name: 'get_package_details',
-                    description: 'Get detailed package information including maintenance status',
+                    description: 'Get detailed information about a specific package',
                     inputSchema: {
                         type: 'object',
                         properties: {
                             package_name: {
                                 type: 'string',
-                                description: 'Name of the package',
-                            },
+                                description: 'Name of the package'
+                            }
                         },
-                        required: ['package_name'],
-                    },
-                },
-            ],
+                        required: ['package_name']
+                    }
+                }
+            ]
         }));
         this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
             try {
@@ -225,44 +175,24 @@ class PyPISearchServer {
                 switch (name) {
                     case 'search_packages': {
                         const query = args?.query;
-                        const alternativeTerms = args?.alternativeTerms;
                         const limit = args?.limit;
                         if (!query) {
                             throw new McpError(ErrorCode.InvalidParams, 'Query is required');
                         }
-                        const results = await this.searchPackages(query, alternativeTerms, limit);
+                        const results = await this.searchPackages(query, limit);
                         if (results.length === 0) {
                             return {
                                 content: [{
                                         type: 'text',
-                                        text: 'No packages found matching the search criteria.',
-                                    }],
-                            };
-                        }
-                        const detailedResults = await Promise.all(results.map(async (result) => {
-                            try {
-                                const details = await this.getPackageDetails(result.name);
-                                return { ...details, searchScore: result.searchScore };
-                            }
-                            catch (error) {
-                                console.error(`Error fetching details for ${result.name}:`, error);
-                                return null;
-                            }
-                        }));
-                        const validResults = detailedResults.filter((r) => r !== null);
-                        if (validResults.length === 0) {
-                            return {
-                                content: [{
-                                        type: 'text',
-                                        text: 'No valid package details found.',
-                                    }],
+                                        text: 'No packages found matching the search criteria.'
+                                    }]
                             };
                         }
                         return {
                             content: [{
                                     type: 'text',
-                                    text: JSON.stringify(validResults, null, 2),
-                                }],
+                                    text: JSON.stringify(results, null, 2)
+                                }]
                         };
                     }
                     case 'get_package_details': {
@@ -274,8 +204,8 @@ class PyPISearchServer {
                         return {
                             content: [{
                                     type: 'text',
-                                    text: JSON.stringify(details, null, 2),
-                                }],
+                                    text: JSON.stringify(details, null, 2)
+                                }]
                         };
                     }
                     default:
@@ -298,17 +228,17 @@ class PyPISearchServer {
                         return {
                             content: [{
                                     type: 'text',
-                                    text: 'Package not found',
+                                    text: 'Package not found'
                                 }],
-                            isError: true,
+                            isError: true
                         };
                     }
                     return {
                         content: [{
                                 type: 'text',
-                                text: `PyPI API error: ${error.message}`,
+                                text: `PyPI API error: ${error.message}`
                             }],
-                        isError: true,
+                        isError: true
                     };
                 }
                 throw error;
