@@ -1,0 +1,39 @@
+# Cline Rules
+
+## Core Development Principles
+
+1. Always check your work:
+
+   - Manually test your changes and fix any bugs before completing a task or creating a pull request
+   - Manually lint your changes and fix any errors, warnings, or style issues before completing a task or creating a pull request
+
+2. Always update the documentation:
+
+   - Update code comments, docstrings, and other forms of inline documentation as necessary before completing a task or creating a pull request
+   - Update the `README.md` file to ensure it contains the most relevant and up-to-date information before completing a task or creating a pull request
+   - Update the documents in the `dev-notes` directory to ensure they reflect your changes and the current state of the project before completing a task or creating a pull request
+
+## Writing Style
+
+General rules:
+
+- Use American English spelling
+- Use the Oxford comma
+- Use sentence case for headers; title case is for titles only
+- Avoid overusing bold, italics, and other formatting
+- Items in a list only use closing punctuation if one or more list items contain more than one sentence
+
+## Code Style
+
+Markdown:
+
+- Separate headers, code blocks, paragraphs, lists, etc., with an empty line above and below
+
+Shell scripts:
+
+- Use POSIX `sh` with the `#!/bin/sh -e` shebang
+- Use `test` instead of `[` or `[[`
+- Use `"${var}"` instead of `"$var"`
+- Use the `shellcheck` tool to lint shell scripts
+- Use the `checkbashisms` tool to check for bashisms
+- Use the `shfmt` tool to format shell scripts
