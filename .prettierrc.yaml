@@ -1,0 +1,4 @@
+overrides:
+  - files: .clinerules
+    options:
+      parser: markdown
