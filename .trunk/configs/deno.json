@@ -1,0 +1,11 @@
+{
+  "lint": {
+    "include": ["MCP/pypi-search/src"],
+    "exclude": [],
+    "rules": {
+      "tags": ["recommended"],
+      "include": [],
+      "exclude": []
+    }
+  }
+}
