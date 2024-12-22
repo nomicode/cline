@@ -3,7 +3,7 @@
 NODE_BIN=node_modules/.bin
 YARN=$(NODE_BIN)/yarn
 TRUNK=$(NODE_BIN)/trunk
-NPX=$(NODE_BIN)/npx
+NPX=npx
 
 # Get the root directory of the project
 ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
@@ -24,6 +24,7 @@ env:
 .PHONY: install  # Install the package.json dependencies with Yarn
 install: env
 	$(YARN) install
+	cd MCP/pypi-search && $(NPX) yarn install
 
 .PHONY: _debug-eslint-config  # Debug the ESLint configuration
 _debug-eslint-config: install
@@ -33,6 +34,7 @@ _debug-eslint-config: install
 fmt: install
 	$(TRUNK) fmt
 
-.PHONY: check  # Run the Trunk code checker
+.PHONY: check  # Run all checks (trunk + subproject tests)
 check: install
 	$(TRUNK) check
+	cd MCP/pypi-search && $(NPX) yarn test
