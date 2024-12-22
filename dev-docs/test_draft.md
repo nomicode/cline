@@ -3,7 +3,8 @@
 ## Package Details Endpoint Tests
 
 ### Basic Functionality
-```typescript
+
+````typescript
 describe('get_package_details', () => {
   test('should return full details for well-maintained package', async () => {
     // Test: Verify we can get complete details for a known good package
@@ -136,17 +137,18 @@ describe('maintenance scoring', () => {
    // Empty string
    const result2 = await pypi.get_package_details({ package_name: "" });
    expect(result2.error).toBe("Invalid package name: cannot be empty");
-   ```
+````
 
 2. Package Not Found:
    ```typescript
    const result = await pypi.get_package_details({
-     package_name: "this-package-does-not-exist-12345"
+     package_name: "this-package-does-not-exist-12345",
    });
    expect(result.error).toBe(JSON.stringify({ message: "Not Found" }));
    ```
 
 ### Notes for Test Implementation
+
 1. Need mock PyPI responses for consistent testing
 2. Should add rate limiting tests
 3. Consider adding timeout tests
@@ -160,6 +162,7 @@ describe('maintenance scoring', () => {
 ### Server Management During Testing
 
 #### Finding Running Servers
+
 ```bash
 # List all running PyPI MCP servers
 ps aux | grep pypi | grep -v grep
@@ -172,6 +175,7 @@ ps aux | grep pypi | grep -v grep | awk '{print $12}'
 ```
 
 #### Verifying Server Version
+
 ```bash
 # Show server configuration (including version)
 cat INDEX_JS_PATH | grep -A 3 'new Server('
@@ -181,22 +185,27 @@ cat INDEX_JS_PATH | grep -A 3 'new Server(' | grep 'version' | sed -E 's,([^.0-9
 ```
 
 #### VSCode Version Check
+
 ```bash
 code -v  # Shows version, commit, architecture
 ```
 
 #### Server Management Steps
+
 1. Before testing:
+
    - Check for running instances
    - Verify correct version is running
    - Kill old instances if needed
 
 2. Starting server:
+
    ```bash
    cd /path/to/server && npm run build && node build/index.js
    ```
 
 3. Stopping server:
+
    ```bash
    # Find and kill by process name
    kill $(ps aux | grep pypi | grep -v grep | awk '{print $2}')
@@ -209,18 +218,19 @@ code -v  # Shows version, commit, architecture
    - Verify correct version is running
 
 ### Required Fixes
+
 1. Add input validation:
    ```typescript
    if (!args?.package_name) {
      throw new McpError(
        ErrorCode.InvalidParams,
-       'package_name parameter is required'
+       "package_name parameter is required",
      );
    }
-   if (args.package_name.trim() === '') {
+   if (args.package_name.trim() === "") {
      throw new McpError(
        ErrorCode.InvalidParams,
-       'package_name cannot be empty'
+       "package_name cannot be empty",
      );
    }
    ```
