@@ -14,7 +14,118 @@
 
    - Update code comments, docstrings, and other forms of inline documentation as necessary before completing a task or creating a pull request
    - Update the `README.md` file to ensure it contains the most relevant and up-to-date information before completing a task or creating a pull request
-   - Update the documents in the `dev-notes` directory to ensure they reflect your changes and the current state of the project before completing a task or creating a pull request
+   - Update the documents in the `dev-docs` directory to ensure they reflect your changes and the current state of the project before completing a task or creating a pull request
+
+3. Follow the development workflow:
+
+   - All work must be done in: /Volumes/Code/2025/github/nomicode/cline
+   - Create branches from main with descriptive names
+   - Keep changes rebased on main
+   - Push changes with atomic commits
+   - Document changes thoroughly
+
+## Development Workflow
+
+### Repository Management
+
+1. Branch Creation:
+
+   - Always create branches from main
+   - Use the `cline/` prefix for all branches
+   - Add a descriptive slug that clearly indicates the purpose
+   - Example: `git checkout -b cline/add-test-framework`
+
+2. Branch Maintenance:
+
+   - Keep branches up to date with main
+   - Regularly rebase to incorporate upstream changes
+   - Resolve conflicts during rebase, not merge
+   - Example: `git rebase -i origin/main`
+
+3. Commit Strategy:
+
+   - Make atomic commits that represent single logical changes
+   - Write clear, descriptive commit messages
+   - Follow the format:
+
+     ```markdown
+     Short summary (50 chars or less)
+
+     More detailed explanatory text. Wrap at 72 characters. The blank
+     line separating the summary from the body is critical.
+
+     - Bullet points are okay
+     - Typically hyphen or asterisk is used
+     - Use hanging indent
+     ```
+
+4. Code Review Preparation:
+
+   - Squash related commits before requesting review
+   - Use interactive rebase to organize commits
+   - Mark intermediate commits as fixup commits
+   - Example:
+     ```bash
+     git rebase -i origin/main
+     # Mark commits as 'fixup' except the first one
+     ```
+
+5. Quality Assurance:
+   - Run all tests before pushing
+   - Address all linter warnings
+   - Update documentation to reflect changes
+   - Verify changes in a clean environment
+
+### Task Management
+
+1. Task Planning:
+
+   - Break down large tasks into smaller, manageable pieces
+   - Create clear acceptance criteria for each task
+   - Document dependencies and prerequisites
+   - Consider impact on existing functionality
+
+2. Implementation:
+
+   - Follow the established code style
+   - Add tests for new functionality
+   - Update existing tests as needed
+   - Document design decisions
+
+3. Verification:
+
+   - Test changes thoroughly
+   - Review your own code first
+   - Address all feedback promptly
+   - Document test results
+
+4. Documentation:
+   - Update relevant documentation
+   - Add inline comments for complex logic
+   - Update API documentation if needed
+   - Document any deviations from existing patterns
+
+### Release Process
+
+1. Preparation:
+
+   - Ensure all tests pass
+   - Update version numbers
+   - Update changelog
+   - Review documentation
+
+2. Review:
+
+   - Create detailed pull request
+   - Address review feedback
+   - Update tests if needed
+   - Verify changes after updates
+
+3. Merge:
+   - Squash commits if necessary
+   - Use descriptive merge commit message
+   - Delete branch after merge
+   - Update related documentation
 
 ## Writing Style
 
@@ -40,3 +151,18 @@ Shell scripts:
 - Use the `shellcheck` tool to lint shell scripts
 - Use the `checkbashisms` tool to check for bashisms
 - Use the `shfmt` tool to format shell scripts
+
+TypeScript/JavaScript:
+
+- Use ESM modules with explicit file extensions
+- Configure TypeScript for strict type checking
+- Use Jest for testing with TypeScript support
+- Follow ESLint rules as configured in the project
+- Use Prettier for consistent formatting
+
+Documentation:
+
+- Add JSDoc comments for exported functions and types
+- Include examples in documentation where helpful
+- Keep documentation close to the code it describes
+- Update documentation when changing functionality
