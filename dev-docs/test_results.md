@@ -1,17 +1,22 @@
 # Test Results - Package Details
 
 ## Endpoint: get_package_details
+
 Date: 2024-01-17
 
 ### Purpose
+
 Test the package details endpoint which provides detailed information about a specific PyPI package, including:
+
 - Basic metadata (name, version, summary, etc.)
 - Release history
 - Maintenance scoring
 - Repository links
 
 ### Happy Path Tests
+
 - [x] Test case 1: Get details for well-maintained package
+
   - Input: `{"package_name": "requests"}`
   - Expected:
     - Full package details
@@ -35,13 +40,16 @@ Test the package details endpoint which provides detailed information about a sp
   - Status: SKIPPED
 
 ### Sad Path Tests
+
 - [ ] Test case 1: Empty package name
+
   - Input: `{"package_name": ""}`
   - Expected: InvalidParams error
   - Actual: [To be tested]
   - Status: PENDING
 
 - [ ] Test case 2: Missing package name
+
   - Input: `{}`
   - Expected: InvalidParams error
   - Actual: [To be tested]
@@ -52,13 +60,17 @@ Test the package details endpoint which provides detailed information about a sp
   - Expected: Package not found error
   - Actual: Received "Package not found" error as expected
   - Status: PASS
+
 ### Issues Found
+
 None - core functionality working as expected:
+
 - Package details retrieval works
 - Maintenance scoring works
 - Error handling works for non-existent packages
 
 ### Notes
+
 - Core functionality (get_package_details) working correctly
 - Maintenance scoring provides useful insights
 - Error handling is clear and informative
@@ -66,6 +78,7 @@ None - core functionality working as expected:
 - Users correctly directed to use pypi.org/search
 
 ### Next Steps
+
 1. Test remaining error cases (empty/missing package name)
 2. Consider adding rate limiting
 3. Add automated tests
