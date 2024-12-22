@@ -5,7 +5,10 @@
 1. Always check your work:
 
    - Manually test your changes and fix any bugs before completing a task or creating a pull request
-   - Manually lint your changes and fix any errors, warnings, or style issues before completing a task or creating a pull request
+   - Manually lint your changes and fix any errors, warnings, or style issues
+     before completing a task or creating a pull request, for example:
+     - Use `make fmt` to format your code with Trunk
+     - Use `make check` to check your code with Trunk
 
 2. Always update the documentation:
 

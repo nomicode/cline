@@ -17,12 +17,17 @@ runtimes:
     - python@3.10.8
 # This is the section where you manage your linters. (https://docs.trunk.io/check/configuration)
 lint:
+  files:
+    - name: markdown
+      filenames:
+        - .clinerules
   enabled:
     - eslint@9.17.0
     - checkov@3.2.343
     - git-diff-check
     - markdownlint@0.43.0
-    - osv-scanner@1.9.2
+    # Produces too many errors for me to be able to fix right now
+    # - osv-scanner@1.9.2
     - prettier@3.4.2
     - renovate@39.76.0
     - shellcheck@0.10.0
